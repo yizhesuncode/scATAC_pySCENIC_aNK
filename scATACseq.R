@@ -1,4 +1,5 @@
 
+
 ###Note：All the directories in this chunk of codes are my local directory
 ###You need to customize your directory to run the whole process
 ##Prepare all the packages for the following running
@@ -80,8 +81,6 @@ doubScores <- addDoubletScores(input = ArrowFiles,
 
 for (i in sampleNames) {
   projncov.i <- projncov[projncov$Sample == i, ]
-  
-  # 过滤掉 log10 可能出错的数据
   projncov.i <- projncov.i[!is.na(projncov.i$nFrags) & projncov.i$nFrags > 0, ]
   projncov.i <- projncov.i[!is.na(projncov.i$TSSEnrichment) & projncov.i$TSSEnrichment >= 0, ]
   
