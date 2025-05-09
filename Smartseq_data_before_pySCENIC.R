@@ -109,6 +109,11 @@ IPLA_NK_merge <- AddModuleScore(
 )
 #Set Cluster 1 as the reference group 
 ref_group <- "Cluster_1"
+df <- IPLA_NK_merge@meta.data %>%
+  dplyr::select(aNK_Score1, Cluster_final) %>%
+  dplyr::rename(score = aNK_Score1, group = Cluster_final) %>%
+  dplyr::mutate(group = as.factor(group))
+
 mat <- pairwise.wilcox.test(df$score, df$group, p.adjust.method = "BH")$p.value
 
 # Initialize the list
