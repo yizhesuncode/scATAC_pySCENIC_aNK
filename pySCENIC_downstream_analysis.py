@@ -103,7 +103,7 @@ fig = plt.figure(figsize=(15, 13))
 
 for c, num in zip(celltype, range(1, len(celltype)+1)):
     x = rss_cellType.T[c]
-    ax = fig.add_subplot(3, 3, num)  # 图的排列
+    ax = fig.add_subplot(3, 3, num)  
     
     plot_rss(rss_cellType, c, top_n=5, max_n=None, ax=ax)
 
@@ -203,7 +203,7 @@ g = sns.clustermap(
     cmap="RdBu_r",
     figsize=(10, 4),
     row_cluster=False,
-    cbar_pos=(0.02, 0.8, 0.02, 0.18)  # 调整 colorbar 位置（避免压右边标签）
+    cbar_pos=(0.02, 0.8, 0.02, 0.18)   
 )
 # Adjustment
 g.fig.subplots_adjust(right=0.93)
@@ -275,7 +275,7 @@ TF = ["PRDM1(+)","SOX6(+)","TBX3(+)","MEIS1(+)","RARA(+)",
           "SP1(+)","STAT2(+)","TCF12(+)","SP2(+)","PURA(+)",
           "SP3(+)","SPI1(+)","ZFX(+)","SP4(+)","BCL11A(+)",
           "EGR1(+)","ZNF281(+)","RREB1(+)","CTCF(+)","FOS(+)",
-          "JUNB(+)"]#选择需要呈现的TF
+          "JUNB(+)"]
 celltype=["Cluster_0","Cluster_1","Cluster_2","Cluster_3",
           "Cluster_4","Cluster_5","Cluster_6","Cluster_7","Cluster_8"]
 
@@ -359,7 +359,7 @@ sc.pl.tsne(
     vmax=[0.18, 0.3, None],
     palette=cluster_palette,
     size=35,
-    show=False  # 👈
+    show=False  
 )
 
 fig = plt.gcf()
