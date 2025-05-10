@@ -1,6 +1,6 @@
 # Epigenetic regulation analysis for ovarian tumor-associated adaptive NK Cell using scATAC workflow (from a public dataset) and PySCENIC (from our smartseq3 data)
 
-This repository contains all the organized codes
+This repository contains all the organized codes.
 It includes R scripts, Python scripts, and a small number of shell commands.
 
 
