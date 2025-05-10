@@ -257,8 +257,8 @@ p7 <- plotEmbedding(ArchRProj = proj.filter,
                     colorBy = "cellColData",
                     name = "ATAC_clusters",
                     embedding = "UMAP",
-                    size = 0.5,plotWidth = 10,  # ⬅️ 增大绘图宽度
-                    plotHeight = 8 )# ⬅️ 增大绘图高度
+                    size = 0.5,plotWidth = 10, 
+                    plotHeight = 8 )# 
 
 
 p7
@@ -486,7 +486,7 @@ p7 <- plotEmbedding(ArchRProj = proj.NK.filter,
                     name = "ATAC_NK_clusters",
                     embedding = "UMAP",
                     size = 1,plotWidth = 10,  # 
-                    plotHeight = 8 )# ⬅️ 
+                    plotHeight = 8 )#  
 
 
 p7
@@ -530,7 +530,7 @@ p7 <- plotEmbedding(ArchRProj = proj.NK.filter,
                     name = "ATAC_NK_clusters",
                     embedding = "UMAP",
                     size = 1,plotWidth = 10, labelSize = 5, # 
-                    plotHeight = 8)# ⬅️ 
+                    plotHeight = 8)# 
 
 
 p7
@@ -767,10 +767,10 @@ proj.NK.filter <- addMotifAnnotations(ArchRProj = proj.NK.filter, motifSet = "ci
 #Peak to gene analysis 
 proj.NK.filter <- addPeak2GeneLinks(
   ArchRProj = proj.NK.filter,
-  reducedDims = "IterativeLSI",  # 你之前降维用的
+  reducedDims = "IterativeLSI",  
   useMatrix = "GeneIntegrationMatrix", # or "GeneIntegrationMatrix" if you integrated RNA
-  corCutOff = 0.4,              # 相关性阈值，默认 0.45
-  maxDist = 250000               # 最大距离，单位 bp
+  corCutOff = 0.4,              # Threshold for correlation,0.45 as default
+  maxDist = 250000               # Maximum distance
 )
 
 
@@ -915,7 +915,7 @@ conventional_long$matched_TFs <- trimws(conventional_long$matched_TFs)
 
 #Summarize the frequency(count) of the TFs in conventional NK cells
 tf2gene_conventional <- conventional_long %>%
-  filter(gene != "") %>%  # 防止空值干扰
+  filter(gene != "") %>%  
   group_by(matched_TFs) %>%
   summarise(
     genes = paste(unique(gene), collapse = ", "),
@@ -1071,7 +1071,7 @@ Upset_list_TF = list(pySCENIC_DA_TFs=TF_from_pySCENIC,
 upset(fromList(Upset_list_TF), 
       sets = c("pySCENIC_DA_TFs", "scATAC_aNK_enriched_TFs_TOP50", "scATAC_cNK_enriched_TFs_TOP50"),
       order.by = "freq", 
-      sets.bar.color = c("#FF8C00", "#4DAF4A", "#B64E89"),  # 为集合条形图指定颜色
+      sets.bar.color = c("#FF8C00", "#4DAF4A", "#B64E89"),  
       text.scale = c(3, 3,2.5,2.5,2.5,3)) 
 
 
