@@ -668,6 +668,7 @@ if (ref_group %in% rownames(mat)) {
   }
 }
 
+
 # One situation:ref_group in colnames
 if (ref_group %in% colnames(mat)) {
   idx <- which(!is.na(mat[, ref_group]))
