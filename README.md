@@ -11,7 +11,6 @@ It includes R scripts, Python scripts, and a small number of shell commands.
 - `scRNA_matched_scATAC.R`: R script processing the matched scRNA data.
 - `Smartseq_data_before_pySCENIC.R`: Preprocessing Smart-seq data before running pySCENIC.
 - `pySCENIC_downstream_analysis.py`: Downstream analysis and visualization of pySCENIC output.
-- `External_validation.py`: Scripts used for validating key transcription factors externally.
 - `pySCENIC_shell_script.sh`: Shell script for running pySCENIC pipeline components.
 - `scATAC_pySCENIC_aNK.Rproj`: RStudio project file.
 
