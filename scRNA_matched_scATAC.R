@@ -656,6 +656,7 @@ mat <- pairwise.wilcox.test(df$score, df$group, p.adjust.method = "BH")$p.value
 # Initialize the list
 pval_list <- list()
 
+
 # One situation：ref_group  in rownames
 if (ref_group %in% rownames(mat)) {
   idx <- which(!is.na(mat[ref_group, ]))
