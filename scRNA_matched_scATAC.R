@@ -694,6 +694,7 @@ pval_df$p.signif <- cut(pval_df$p.adj,
                         labels = c("****", "***", "**", "*", "ns"))
 
 #Visualize the violin map showing the comparsion of aNK score across all the clusters
+cors <- dittoColors(13) 
 ggviolin(
   df, x = "group", y = "score",
   fill = "group",
@@ -715,7 +716,10 @@ ggviolin(
     tip.length = 0.01,
     size = 4.5
   ) +
-  ylim(NA, max(pval_df$y.position) + 0.3) +
+  scale_y_continuous(
+    limits = c(0, 0.5),
+    breaks = seq(0, 1, by = 0.25) 
+  )+
   theme_minimal(base_size = 13) +
   theme(
     panel.grid = element_blank(),        
