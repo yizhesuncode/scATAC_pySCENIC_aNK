@@ -39,6 +39,27 @@ library(HGNChelper)
 #Standard workflow using SCTranform; RunPCA; RunHarmony;RunUMAP,FindNeighbors, FindClusters
 
 IPLA_NK_merge=readRDS("~/data_my_single_cell/Rds_file/IPLA_NK_merge.rds")
+
+IPLA_NK_merge@meta.data[1:5,]
+
+
+IPLA_NK_merge@meta.data$patient_ID <- case_when(
+  grepl("^IPLA1062", rownames(IPLA_NK_merge@meta.data)) ~ "Smartseq3_ov1",
+  grepl("^IPLA1065", rownames(IPLA_NK_merge@meta.data))   ~ "Smartseq3_ov2",
+  grepl("^VZB001", rownames(IPLA_NK_merge@meta.data))   ~ "Smartseq2_ov1",
+  grepl("^VZB002", rownames(IPLA_NK_merge@meta.data))   ~ "Smartseq2_ov2",
+  grepl("^VZB003", rownames(IPLA_NK_merge@meta.data))   ~ "Smartseq2_ov3",
+  grepl("^VZB004", rownames(IPLA_NK_merge@meta.data))   ~ "Smartseq2_ov4",
+  grepl("^VZB005", rownames(IPLA_NK_merge@meta.data))   ~ "Smartseq2_ov5",
+  TRUE ~ "Unknown"
+)
+
+IPLA_NK_merge$patient_ID
+
+IPLA_NK_merge$Cluster_final
+
+
+
 Idents(IPLA_NK_merge) <- "Cluster_final"
 cors <- dittoColors(13) 
 #Visualize the UMAP 
@@ -92,6 +113,85 @@ results=as.data.frame(NKsctype_scores)
 
 #Save the annotation results
 write.csv(results,"~/IPLA_tumor_NK_Pyscenic/csv_files/Clusters_annotation_merged_aNK_annotation_IPLA.csv")
+
+
+##Add the NK annotation result
+cf <- as.character(IPLA_NK_merge$Cluster_final)
+
+IPLA_NK_merge$Cluster_final <- dplyr::recode(
+  cf,
+  "Cluster_1" = "Cluster_1(Adaptive NK)",
+  "Cluster_8" = "Cluster_8(Conventional NK)",
+  "Cluster_4" = "Cluster_4(Inflamed NK)"
+)
+
+IPLA_NK_merge$Cluster_final <- factor(IPLA_NK_merge$Cluster_final)
+IPLA_NK_merge$Cluster_final
+
+
+
+##Visualize total NK cells distribution within the patients
+
+df_all <- IPLA_NK_merge@meta.data %>%
+  as.data.frame() %>%
+  dplyr::count(patient_ID, name = "n")
+
+df_all$patient_ID <- factor(df_all$patient_ID, levels = c(
+  "Smartseq3_ov1", "Smartseq3_ov2", "Smartseq2_ov1", "Smartseq2_ov2", "Smartseq2_ov3",
+  "Smartseq2_ov4", "Smartseq2_ov5"
+))
+
+ggplot(df_all, aes(x = reorder(patient_ID, -n), y = n, fill = patient_ID)) +
+  geom_col(width = 0.7, color = "white", show.legend = FALSE) +
+  geom_text(aes(label = n), vjust = -0.4, size = 5) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Total cell contributions by patients",
+    x = "Patient ID",
+    y = "Number of cells"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.title = element_text(hjust = 0.5), 
+    axis.text.x = element_text(angle = 45,size = 20,hjust = 1),
+    axis.text.y  = element_text(size = 20),
+    axis.title.x = element_text(size = 20),           
+    axis.title.y = element_text(size = 20)  
+  )
+
+
+
+
+
+
+
+##Visualize the adaptive NK distribution within the patients
+table(IPLA_NK_merge$patient_ID[IPLA_NK_merge$Cluster_final == "Cluster_1(Adaptive NK)"])
+
+
+df <- IPLA_NK_merge@meta.data %>%
+  as.data.frame() %>%
+  dplyr::filter(Cluster_final == "Cluster_1(Adaptive NK)") %>%
+  dplyr::count(patient_ID)
+
+ggplot(df, aes(x = reorder(patient_ID, -n), y = n, fill = patient_ID)) +
+  geom_col(width = 0.7, color = "white", show.legend = FALSE) + 
+  geom_text(aes(label = n), vjust = -0.4, size = 6) +
+  scale_fill_brewer(palette = "Set2") + 
+  labs(
+    title = "Distribution of patients within Cluster_1 (Adaptive NK)",
+    x = "Patient ID",
+    y = "Number of cells"
+  ) +
+  theme_minimal(base_size = 18) +  # 简洁主题
+  theme(
+    plot.title = element_text(hjust = 0.5), 
+    axis.text.x = element_text(angle = 45,size = 20,hjust = 1),
+    axis.text.y  = element_text(size = 20),
+    axis.title.x = element_text(size = 20),           
+    axis.title.y = element_text(size = 20)  
+  )
+
 
 #Use addmodulescore to score the adaptive NK cluster (Cluster 1)
 #Read our annotation geneset
@@ -169,14 +269,17 @@ ggviolin(
     shape = 16,            
     color = "black"
   ) +
-  stat_pvalue_manual(
-    pval_df,
-    label = "p.signif",
-    y.position = "y.position",
-    tip.length = 0.01,
-    size = 4.5
+ # stat_pvalue_manual(
+ #   pval_df,
+ #   label = "p.signif",
+ #   y.position = "y.position",
+  #  tip.length = 0.01,
+  #  size = 4.5
+ # ) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.2) 
   ) +
-  ylim(NA, max(pval_df$y.position) + 0.3) +
   theme_minimal(base_size = 13) +
   theme(
     panel.grid = element_blank(),        
