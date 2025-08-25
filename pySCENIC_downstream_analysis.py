@@ -26,13 +26,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pyscenic.binarization import binarize
 from adjustText import adjust_text
-
+import re
 
 
 sc.settings.verbosity = 3 # verbosity: errors (0), warnings (1), info (2), hints (3)
 sc.logging.print_versions()
 sc.set_figure_params(dpi=300, fontsize=10, dpi_save=600)
-
+os.chdir("/disk2/user/yizhsu/IPLA_tumor_NK_Pyscenic")
 #Construct adata in python
 #Build a function which can transfer the seurat file to adata
 def seurat_to_adata(counts,#counts.mtx
@@ -66,7 +66,14 @@ IPLA_NK_merge = seurat_to_adata(
     reduction2='UMAP_2'
 )
 
+IPLA_NK_merge.obs['Cluster_final'].unique()
+IPLA_NK_merge.obs['Cluster_final'] = IPLA_NK_merge.obs['Cluster_final'].replace({
+    'Cluster_1': 'Cluster_1(Adaptive NK)',
+    'Cluster_8': 'Cluster_8(Conventional NK)',
+    'Cluster_4': 'Cluster_4(Inflamed NK)'
+})
 
+IPLA_NK_merge.obs['Cluster_final'].unique()
 # Set the overall style
 sc.set_figure_params(dpi=150, frameon=False, figsize=(5, 5))
 sc.settings.set_figure_params(dpi_save=300)  
@@ -94,8 +101,8 @@ rss_cellType = regulon_specificity_scores(auc_mtx, IPLA_NK_merge.obs.Cluster_fin
 rss_cellType.to_csv("IPLA_NK_rss_clusters.csv", index=True)
 
 
-celltype=["Cluster_0","Cluster_1","Cluster_2","Cluster_3",
-          "Cluster_4","Cluster_5","Cluster_6","Cluster_7","Cluster_8"]
+celltype=["Cluster_0","Cluster_1(Adaptive NK)","Cluster_2","Cluster_3",
+          "Cluster_4(Inflamed NK)","Cluster_5","Cluster_6","Cluster_7","Cluster_8(Conventional NK)"]
 
 
 #Visualize the top5 TF in each cluster
@@ -140,8 +147,10 @@ plt.rcParams.update({
     'ytick.labelsize': 'medium'
 })
 
-plt.savefig("rank_RSS_top5_2.pdf", dpi=600, bbox_inches="tight")
+
+plt.savefig("/disk2/user/yizhsu/IPLA_tumor_NK_Pyscenic/figures/rank_RSS_top5_2.pdf", dpi=600, bbox_inches="tight")
 plt.show()
+
 
 
 #Visualize the RSS matrix by heatmap
@@ -201,19 +210,21 @@ g = sns.clustermap(
     vmin=-2, vmax=2,
     row_colors=row_colors,
     cmap="RdBu_r",
-    figsize=(10, 4),
+    figsize=(12, 4),
     row_cluster=False,
     cbar_pos=(0.02, 0.8, 0.02, 0.18)   
 )
 # Adjustment
 g.fig.subplots_adjust(right=0.93)
 plt.tight_layout()
-plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=11)
+plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=18)
 plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha='right', fontsize=10)
-plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=11)
+plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=18)
 g.ax_heatmap.set_ylabel('')
 g.ax_heatmap.set_xlabel('')
 plt.show()
+
+
 
 
 #Visualize the 21 selectd TFs RSS by heatmap
@@ -269,6 +280,59 @@ g.ax_heatmap.set_xlabel('')
 plt.show()
 
 
+#Second way to visualize 
+
+file_path = os.path.expanduser("~/IPLA_tumor_NK_Pyscenic/IPLA_NK_rss_clusters_SD.csv")
+rss_cellType_Z = pd.read_csv(file_path, index_col=0)
+
+TF_plot = ["PRDM1(+)","SOX6(+)","TBX3(+)","MEIS1(+)","RARA(+)",
+           "SP1(+)","STAT2(+)","TCF12(+)","SP2(+)","PURA(+)",
+           "SP3(+)","SPI1(+)","ZFX(+)","SP4(+)","BCL11A(+)",
+           "EGR1(+)","ZNF281(+)","RREB1(+)","CTCF(+)","FOS(+)",
+           "JUNB(+)"]
+TF_plot = [r.strip() for r in TF_plot]
+cluster_list  = rss_cellType_Z.index.tolist()
+colors = ["#E69F00","#56B4E9","#009E73","#F0E442","#0072B2",
+          "#D55E00","#CC79A7","#999999","#660099"]
+cluster_palette = dict(zip(cluster_list, colors))
+row_colors = pd.Series(rss_cellType_Z.index, index=rss_cellType_Z.index).map(cluster_palette)
+
+sns.set(font_scale=1.2)
+
+n_rows = rss_cellType_Z.shape[0]
+n_cols = len(TF_plot)
+H = max(6, 0.55 * n_rows)    
+W = max(10, 0.85 * n_cols)    
+
+g = sns.clustermap(
+    rss_cellType_Z[TF_plot],
+    annot=False,
+    square=False,
+    linecolor='black',
+    yticklabels=True,
+    xticklabels=True,
+    vmin=-2, vmax=2,
+    row_colors=row_colors,     
+    row_cluster=False,
+    cmap="RdBu_r",
+    figsize=(W, H),
+    cbar_pos=(0.12, 0.03, 0.76, 0.03)
+)
+
+g.cax.set_xticks([])
+g.cax.set_yticks([])
+g.fig.subplots_adjust(left=0.22, right=0.98, top=0.96, bottom=0.12)
+plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=18)
+plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha='right', fontsize=18)
+g.ax_heatmap.set_ylabel('')
+g.ax_heatmap.set_xlabel('')
+
+out_path = "/disk2/user/yizhsu/IPLA_tumor_NK_Pyscenic/figures/cluster_heatmap_TFplot.pdf"
+g.savefig(out_path, dpi=600, bbox_inches="tight")
+print("Saved:", out_path)
+
+
+
 #Heatmap for 21 TFs in all the cells 
 
 TF = ["PRDM1(+)","SOX6(+)","TBX3(+)","MEIS1(+)","RARA(+)",
@@ -276,8 +340,8 @@ TF = ["PRDM1(+)","SOX6(+)","TBX3(+)","MEIS1(+)","RARA(+)",
           "SP3(+)","SPI1(+)","ZFX(+)","SP4(+)","BCL11A(+)",
           "EGR1(+)","ZNF281(+)","RREB1(+)","CTCF(+)","FOS(+)",
           "JUNB(+)"]
-celltype=["Cluster_0","Cluster_1","Cluster_2","Cluster_3",
-          "Cluster_4","Cluster_5","Cluster_6","Cluster_7","Cluster_8"]
+celltype=["Cluster_0","Cluster_1(Adaptive NK)","Cluster_2","Cluster_3",
+          "Cluster_4(Inflamed NK)","Cluster_5","Cluster_6","Cluster_7","Cluster_8(Conventional NK)"]
 
 
 IPLA_NK_SCENIC = '/disk2/user/yizhsu/IPLA_tumor_NK_Pyscenic/IPLA_NK_merge_SCENIC.loom'
@@ -335,15 +399,33 @@ IPLA_NK_merge = seurat_to_adata(
     reduction2='UMAP_2'
 )
 
+IPLA_NK_merge.obs['Cluster_final'] = IPLA_NK_merge.obs['Cluster_final'].astype(str)
+
+IPLA_NK_merge.obs['Cluster_final'] = IPLA_NK_merge.obs['Cluster_final'].replace({
+    'Cluster_1': 'Cluster_1(Adaptive NK)',
+    'Cluster_8': 'Cluster_8(Conventional NK)',
+    'Cluster_4': 'Cluster_4(Inflamed NK)'
+})
+
+
+
+
+
 #Merge AUC in scRNA object 
 add_scenic_metadata(IPLA_NK_merge, auc_mtx)# Add AUC in scRNA object 
 
 #Choose the TFs we would like to show
-sc.set_figure_params(frameon=False, dpi=150, fontsize=8)
+sc.set_figure_params(frameon=False, dpi=150, fontsize=16)
 sc.pl.tsne(IPLA_NK_merge, color=['Regulon(STAT2(+))','Regulon(PRDM1(+))','Cluster_final'], ncols=3, cmap = "RdPu")
 
+
+
+
 clusters = IPLA_NK_merge.obs['Cluster_final'].unique().tolist()
-sorted_clusters = sorted(clusters, key=lambda x: int(x.split('_')[1]))
+sorted_clusters = sorted(
+    clusters,
+    key=lambda x: int(re.search(r'Cluster_(\d+)', x).group(1))
+)
 
 colors = [
     "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
@@ -353,25 +435,24 @@ colors = [
 cluster_palette = dict(zip(sorted_clusters, colors))
 sc.pl.tsne(
     IPLA_NK_merge,
-    color=['Regulon(PRDM1(+))','Regulon(STAT2(+))','Cluster_final'],
+    color=['Regulon(PRDM1(+))', 'Regulon(STAT2(+))', 'Cluster_final'],
     ncols=3,
     cmap="RdPu",
     vmax=[0.18, 0.3, None],
     palette=cluster_palette,
-    size=35,
-    show=False  
+    size=50,
+    show=False            
 )
-
 fig = plt.gcf()
 
 for ax in fig.axes:
-    ax.title.set_fontsize(12)              
-    ax.tick_params(labelsize=10)           
+    ax.title.set_fontsize(16)              
+    ax.tick_params(labelsize=16)           
     legend = ax.get_legend()
     if legend is not None:
         for text in legend.get_texts():
-            text.set_fontsize(12)          
-        legend.set_title(legend.get_title().get_text(), prop={'size': 13})  
+            text.set_fontsize(16)          
+        legend.set_title(legend.get_title().get_text(), prop={'size': 16})  
 
 plt.tight_layout()
 plt.show()
@@ -415,10 +496,10 @@ aucell_adata = sc.AnnData(X=auc_mtx_Z.sort_index())
 aucell_adata.obs = df_obs
 
 plt.rcParams.update({
-    'xtick.labelsize': 10,   
-    'ytick.labelsize': 10,   
-    'axes.labelsize': 10,    
-    'font.size': 10          
+    'xtick.labelsize': 17,   
+    'ytick.labelsize': 17,   
+    'axes.labelsize': 17,    
+    'font.size': 17          
 })
 
 sc.pl.stacked_violin(
@@ -433,7 +514,7 @@ sc.pl.stacked_violin(
     show=False
 )
 
-plt.xticks(rotation=45, ha='right')     
+plt.xticks(rotation=45, ha='right')     http://cbb.medh.ki.se:8787/graphics/ff7ac6da-bc88-4c3e-835e-f5dacec03ca0.png
 plt.subplots_adjust(bottom=0.35)        
 plt.tight_layout()
 plt.show()
