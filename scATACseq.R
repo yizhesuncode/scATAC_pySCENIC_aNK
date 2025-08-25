@@ -32,6 +32,7 @@ library(UpSetR)
 set.seed(44)
 addArchRGenome("hg38")
 addArchRThreads(threads = 4)
+
 ###First part started
 #Download the 6 patients from GSE173682: Patient 6 to Patient 11
 
@@ -496,6 +497,7 @@ p7 <- p7 + theme(
 
 p7
 
+
 #Cleansing the NK ATAC clusters, remove the C1, which contains very few cells  
 
 proj.NK.filter$ATAC_NK_clusters_original <- proj.NK.filter$ATAC_NK_clusters
@@ -537,8 +539,19 @@ p7 <- p7 + theme(
   legend.text = element_text(size = 14),  
   legend.title = element_text(size = 14) 
 )
+p7 <- p7 + theme(
+  legend.text = element_text(size = 15),
+  legend.title = element_text(size = 15),
+  axis.title = element_text(size = 15),
+  axis.text = element_text(size = 15),
+  plot.title = element_text(hjust = 0.5, size = 18, face = "bold") 
+) +
+  labs(x = "UMAP_1", y = "UMAP_2", color = "Clusters") +        
+  ggtitle("NK ATAC clusters before QC")                #
 
 p7
+
+
 
 #addImputeWeights
 proj.NK.filter <- addImputeWeights(ArchRProj =  proj.NK.filter)
@@ -627,7 +640,7 @@ p1
 saveRDS(proj.NK.filter,"~/data_my_scATAC/Data/proj.NK.filter_LSI_GeneScores_Annotations_Int_final.rds")
 
 
-###Second step finished 
+########################Second step finished 
 
 ###Third step starated 
 proj.NK.filter=readRDS("~/data_my_scATAC/Data/proj.NK.filter_LSI_GeneScores_Annotations_Int_final.rds")
@@ -693,21 +706,209 @@ marker_Peaks_df <- do.call(rbind, lapply(names(valid_marker_Peaks), function(nam
 saveRDS(marker_Peaks_df, "~/data_my_scATAC/Data/marker_Peaks_clean.rds")
 write.csv(marker_Peaks_df, file = '~/data_my_scATAC/Data/marker_Peaks.csv')
 marker_Peaks_df=readRDS("~/data_my_scATAC/Data/marker_Peaks_clean.rds")
+marker_Peaks_df <- marker_Peaks_df %>%
+  mutate(peak_id = paste0(seqnames, ":", start, "-", end))
+
+#Heatmap for the DAR peaks
+sig_peaks <- unique(marker_Peaks_df$peak_id)
+
+peak_ids <- paste0(
+  rowData(markerPeaks)$seqnames, ":",
+  rowData(markerPeaks)$start, "-",
+  rowData(markerPeaks)$end
+)
+
+mat <- assay(markerPeaks, "Mean") 
+mat_sig <- mat[rownames(mat) %in% sig_peaks, ]
+mat_z <- t(scale(t(mat_sig)))
+
+clusters <- unique(marker_Peaks_df$Cluster)
+
+col_fun <- colorRamp2(
+  c(-2, 0, 2),
+  c("#313695", "white", "red")
+)
+
+# heatmap visualization
+Heatmap(
+  mat_z,
+  name = "Row Z-scores",
+  col = colorRamp2(c(-2, 0, 2), c("#313695", "white", "red")),  
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  show_row_names = FALSE,
+  column_names_gp = gpar(fontsize = 15),        
+  column_title = "NK cell subtypes",
+  #column_names_rot = 45, 
+  column_title_gp = gpar(fontsize = 15),        
+  row_title = "Differentially accessible peaks (DAPs)",
+  row_title_gp = gpar(fontsize = 16),           
+  border = TRUE,                                                    
+  heatmap_legend_param = list(
+    title = "Row Z-scores",
+    title_gp = gpar(fontsize = 15),
+    labels_gp = gpar(fontsize = 15),
+    legend_height = unit(4, "cm")
+  )
+)
+
+###cis elements distribution
+library(GenomicRanges)
+library(ChIPseeker)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(org.Hs.eg.db)
 
 
 #Annotate the peaks using Chipseek
+peak_unique <- marker_Peaks_df %>%
+  distinct(seqnames, start, end, Cluster)
+
 peaks_gr <- GRanges(
-  seqnames = marker_Peaks_df$seqnames,
-  ranges = IRanges(start = marker_Peaks_df$start, end = marker_Peaks_df$end,
-                   Cluster = marker_Peaks_df$Cluster)
+  seqnames = peak_unique$seqnames,
+  ranges = IRanges(start = peak_unique$start, end = peak_unique$end),
+  Cluster = peak_unique$Cluster
 )
-peakAnno <- annotatePeak(peaks_gr, 
-                         tssRegion = c(-3000, 3000),  # loci range
-                         TxDb = TxDb.Hsapiens.UCSC.hg38.knownGene, 
-                         annoDb = "org.Hs.eg.db")
+
+peakAnno <- annotatePeak(
+  peaks_gr, 
+  tssRegion = c(-3000, 3000),  
+  TxDb = TxDb.Hsapiens.UCSC.hg38.knownGene, 
+  annoDb = "org.Hs.eg.db"
+)
+
 peak_annot_df <- as.data.frame(peakAnno)
-peak_annot_df$peak <- paste0(peak_annot_df$seqnames, ":", peak_annot_df$start, "-", peak_annot_df$end)
+peak_annot_df$peak <- paste0(
+  peak_annot_df$seqnames, ":", peak_annot_df$start, "-", peak_annot_df$end
+)
+
+
+peak_annot_df <- peak_annot_df %>%
+  mutate(cis_category = case_when(
+    grepl("Promoter", annotation, ignore.case = TRUE)   ~ "Promoter (±3kb)",
+    grepl("5' UTR", annotation, ignore.case = TRUE)     ~ "5' UTR",
+    grepl("3' UTR", annotation, ignore.case = TRUE)     ~ "3' UTR",
+    grepl("Exon", annotation, ignore.case = TRUE)       ~ "Exon",
+    grepl("Intron", annotation, ignore.case = TRUE)     ~ "Intron",
+    grepl("Downstream", annotation, ignore.case = TRUE) ~ "Downstream",
+    grepl("Intergenic", annotation, ignore.case = TRUE) ~ "Distal intergenic",
+    TRUE                                                ~ "Other"
+  ))
+
+pal <- c(
+  "Promoter (±3kb)"    = "#6A8DCF",  #
+  "Intron"             = "#B6A5CF",  #
+  "Distal intergenic"  = "#F4B96B",  # 
+  "Exon"               = "#7FBF7F",  # 
+  "3' UTR"              = "#B38C7A",  # 
+  "5' UTR"              = "#B0B0B0"   # 
+)
+lev <- names(pal)
+threshold <- 0.5  # 
+
+# 
+anno_sum <- tibble::as_tibble(peak_annot_df) |>
+  dplyr::transmute(cis_category = as.character(cis_category)) |>
+  dplyr::filter(!is.na(cis_category)) |>
+  dplyr::count(cis_category, name = "n") |>
+  dplyr::mutate(
+    percent = 100 * n / sum(n),
+    label   = paste0(round(percent, 1), "%"),
+    cis_category = factor(cis_category, levels = lev)
+  ) |>
+  dplyr::arrange(cis_category) |>
+  dplyr::mutate(ypos = cumsum(percent) - percent/2) 
+
+# 
+ggplot(anno_sum, aes(x = 1, y = percent, fill = cis_category)) +
+  geom_col(color = "white", width = 1) +
+
+  geom_text(
+    data = subset(anno_sum, percent > threshold),
+    aes(label = label, group = cis_category),
+    position = position_stack(vjust = 0.5),
+    size = 7, show.legend = FALSE
+  ) +
+  geom_segment(
+    data = subset(anno_sum, percent <= threshold),
+    aes(x = 1.00, xend = 1.10, y = ypos, yend = ypos),
+    inherit.aes = FALSE, color = "grey40", linewidth = 0.3
+  ) +
+  geom_text(
+    data = subset(anno_sum, percent <= threshold),
+    aes(x = 1.5, y = ypos, label = label),
+    inherit.aes = FALSE, size = 7, hjust = 0
+  ) +
+  coord_polar(theta = "y", start = pi/2, direction = -1) + 
+  scale_fill_manual(values = pal, breaks = lev) +
+  xlim(0.5, 1.6) + 
+  theme_void() +
+  theme(legend.title = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        plot.margin = margin(t = 2, r = 10, b = 2, l = 2),
+        plot.title = element_text( hjust = 0.5, size = 20,
+                                   margin = margin(b = 0))) +
+  labs(title = "Distribution of cis-regulatory elements(CREs) in DAPs",
+       fill = "Regions of genome")
+
+
 write.csv(peak_annot_df, "~/data_my_scATAC/Data/annotated_peaks_with_clusters.csv", row.names = FALSE)
+
+##
+
+pal <- c(
+  "Promoter (±3kb)"    = "#6A8DCF",
+  "Intron"             = "#B6A5CF",
+  "Distal intergenic"  = "#F4B96B",
+  "Exon"               = "#7FBF7F",
+  "3' UTR"             = "#B38C7A",
+  "5' UTR"             = "#B0B0B0"
+)
+lev <- names(pal)
+
+
+cluster_cis <- tibble::as_tibble(peak_annot_df) %>%
+  dplyr::mutate(
+    cis_category = factor(as.character(cis_category), levels = lev)
+  ) %>%
+  dplyr::count(Cluster, cis_category, name = "n") %>%
+  dplyr::group_by(Cluster) %>%
+  dplyr::mutate(
+    percent = 100 * n / sum(n),
+    label = paste0(round(percent, 1), "%")  
+  ) %>%
+  dplyr::ungroup()
+
+
+ggplot(cluster_cis, aes(x = Cluster, y = percent, fill = cis_category)) +
+  geom_col(color = "white") +
+  geom_text(
+    data = subset(cluster_cis, percent >= 0.3),  
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    size = 6
+  ) +
+  scale_fill_manual(values = pal, breaks = lev) +
+  labs(
+    y = "Percentage of DAPs locations in genome",
+    fill = "Regions of genome",
+    title = "DAPs distribution per NK cell subtypes"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 16),
+    axis.text.x = element_text(size = 18),        
+    axis.title = element_text(size = 16), 
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size=18),
+    axis.text.y = element_text(size=17),
+    plot.title = element_text(hjust = 0.5, size = 18
+   )
+  )
+
+
+
 
 
 
@@ -758,9 +959,8 @@ MAplot <- MAplot +
   geom_point(size = 2) 
 
 #Identify the motif information 
+
 proj.NK.filter <- addMotifAnnotations(ArchRProj = proj.NK.filter, motifSet = "cisbp", name = "Motif", force = TRUE)
-
-
 
 
 #Peak to gene analysis 
@@ -812,11 +1012,10 @@ p2g_filtered <- p2g_filtered[order(p2g_filtered$Cluster),]
 write.csv(p2g_filtered,"~/data_my_scATAC/Data/sig_peak2gene_with_cluster.csv",row.names = F)
 
 
-
 #Read the Motif-Matches-In-Peaks.rds files containing the matched TF motifs
 motif_matches <- readRDS("/disk2/user/yizhsu/data_my_scATAC/Single_RNA_data/NK_cells_ATAC_proj_no_C1/Annotations/Motif-Matches-In-Peaks.rds")
 
-#Extract the matrix containing the information whether TF motifs apppear in certain peaks
+#######Extract the matrix containing the information whether TF motifs apppear in certain peaks
 motif_matrix <- assay(motif_matches, "matches") 
 
 #Make the coordinates of location of peaks
@@ -875,6 +1074,11 @@ motif_peak_df <- unique(motif_peak_df)
 #Save the csv file
 write.csv(motif_peak_df,"~/data_my_scATAC/Data/Motif_TF_gene_with_clusters.csv",row.names = FALSE)
 
+motif_peak_df=read.csv("~/data_my_scATAC/Data/Motif_TF_gene_with_clusters.csv")
+peak_annot_df=read.csv("~/data_my_scATAC/Data/annotated_peaks_with_clusters.csv")
+
+
+
 
 #Choose the TOP50 TF motifs for adaptive NK cluster and conventional NK cluster
 
@@ -884,21 +1088,23 @@ motif_peak_df=read.csv("~/data_my_scATAC/Data/Motif_TF_gene_with_clusters.csv")
 adaptive_df <- motif_peak_df[motif_peak_df$Cluster == "Adaptive_NK_cells", ]
 
 adaptive_long <- adaptive_df %>%
-  select(peak, gene, matched_TFs) %>%
+  dplyr::select(peak, gene, matched_TFs) %>%
   separate_rows(matched_TFs, sep = ", ")
 
 adaptive_long$matched_TFs <- trimws(adaptive_long$matched_TFs)
 
 #Summarize the frequency(count) of the TFs in adaptive NK cells
 tf2gene_adaptive <- adaptive_long %>%
-  filter(gene != "") %>%  
-  group_by(matched_TFs) %>%
-  summarise(
+  dplyr::filter(gene != "") %>%  
+  dplyr::group_by(matched_TFs) %>%
+  dplyr::summarise(
     genes = paste(unique(gene), collapse = ", "),
     gene_count = n_distinct(gene),
     .groups = "drop"
   ) %>%
-  arrange(desc(gene_count))
+  arrange(dplyr::desc(gene_count))
+
+
 
 TF_aNK <- tf2gene_adaptive$matched_TFs
 
@@ -907,28 +1113,110 @@ motif_peak_df=read.csv("~/data_my_scATAC/Data/Motif_TF_gene_with_clusters.csv")
 conventional_df <- motif_peak_df[motif_peak_df$Cluster == "Conventional_NK_cells", ]
 
 conventional_long <- conventional_df %>%
-  select(peak, gene, matched_TFs) %>%
+  dplyr::select(peak, gene, matched_TFs) %>%
   separate_rows(matched_TFs, sep = ", ")
 
 conventional_long$matched_TFs <- trimws(conventional_long$matched_TFs)
 
 #Summarize the frequency(count) of the TFs in conventional NK cells
 tf2gene_conventional <- conventional_long %>%
-  filter(gene != "") %>%  
-  group_by(matched_TFs) %>%
-  summarise(
+  dplyr::filter(gene != "") %>%  
+  dplyr::group_by(matched_TFs) %>%
+  dplyr::summarise(
     genes = paste(unique(gene), collapse = ", "),
     gene_count = n_distinct(gene),
     .groups = "drop"
   ) %>%
-  arrange(desc(gene_count))
+  arrange(dplyr::desc(gene_count))
 
 TF_cNK <- tf2gene_conventional$matched_TFs
+
+################
+##DAR heatmap with TFs
+
+motif_peak_df=read.csv("~/data_my_scATAC/Data/Motif_TF_gene_with_clusters.csv")
+peak_annot_df=read.csv("~/data_my_scATAC/Data/annotated_peaks_with_clusters.csv")
+
+#motif_matches <- readRDS("/disk2/user/yizhsu/data_my_scATAC/Single_RNA_data/NK_cells_ATAC_proj_no_C1/Annotations/Motif-Matches-In-Peaks.rds")
+#mm <- assay(motif_matches, "matches") 
+
+#peak_coords <- paste0(seqnames(rowRanges(motif_matches)), ":", 
+#                      start(rowRanges(motif_matches)), "-", 
+#                      end(rowRanges(motif_matches)))
+#rownames(mm) <- peak_coords
+#colnames(mm) <- gsub("_[0-9]+$", "", colnames(mm))
+
+#marker_Peaks_df=readRDS("~/data_my_scATAC/Data/marker_Peaks_clean.rds")
+#marker_Peaks_df <- marker_Peaks_df %>%
+#  mutate(peak_id = paste0(seqnames, ":", start, "-", end))
+#sig_peaks <- unique(marker_Peaks_df$peak_id)
+#peak_ids <- paste0(
+#  rowData(markerPeaks)$seqnames, ":",
+#  rowData(markerPeaks)$start, "-",
+#  rowData(markerPeaks)$end
+#)
+#mat <- assay(markerPeaks, "Mean") 
+#mat_sig <- mat[rownames(mat) %in% sig_peaks, ]
+#mat_z <- t(scale(t(mat_sig)))
+
+ht0  <- Heatmap(mat_z, cluster_rows = TRUE, cluster_columns = TRUE, show_row_names = FALSE)
+ht0d <- draw(ht0)
+row_order_names <- rownames(mat_z)[unlist(row_order(ht0d))]   
+
+topN <- 25
+topTF <- head(tf2gene_adaptive$matched_TFs, topN) %>% 
+  trimws() %>%
+  union("STAT2")
+
+tf_peak_long <- motif_peak_df %>%
+  filter(Cluster == "Adaptive_NK_cells") %>%
+  transmute(peak, Cluster, gene, SYMBOL, TFs = matched_TFs) %>%
+  separate_rows(TFs, sep = ",\\s*") %>%
+  mutate(TF = trimws(TFs)) %>%
+  filter(TF %in% topTF) %>%
+  arrange(TF) %>%               
+  distinct(TF, .keep_all = TRUE) 
+
+mat_ord <- mat_z[row_order_names, , drop = FALSE]
+pos <- match(tf_peak_long$peak, rownames(mat_ord))
+ok  <- !is.na(pos)
+pos <- pos[ok]
+labs <- tf_peak_long$TF[ok]
+
+lab_by_pos <- tapply(labs, pos, function(v) paste(sort(unique(v)), collapse = "\n"))
+pos_uniq  <- as.integer(names(lab_by_pos))
+labs_uniq <- as.character(lab_by_pos)
+
+left_ann <- rowAnnotation(
+  `Top TFs (aNK)` = anno_mark(
+    at = pos_uniq,
+    labels = labs_uniq,
+    side = "left",
+    link_width = unit(2, "mm"),
+    labels_gp = gpar(fontsize = 12, lineheight = 0.9)
+  ),
+  width = unit(6, "cm")
+)
+
+ht_main <- Heatmap(
+  mat_ord,
+  name = "Row Z-scores",
+  col = colorRamp2(c(-2, 0, 2), c("#313695", "white", "red")),
+  cluster_rows = FALSE,              
+  cluster_columns = TRUE,
+  show_row_names = FALSE,            
+  left_annotation = left_ann,
+  border = TRUE
+)
+draw(ht_main)
+
+
 
 
 #Visualize the adaptive NK TF counts and TF-gene regulatory map and 
 #Top50 TF
 #The count number for TOP TFs in adaptive NK cells
+
 top_tf_adaptive <- motif_peak_df %>%
   filter(Cluster == "Adaptive_NK_cells") %>%
   pull(matched_TFs) %>%
@@ -951,67 +1239,80 @@ adaptive_top50 <- adaptive_long %>%
   filter(matched_TFs %in% top50_tfs)
 
 tf_gene_edges_top50 <- adaptive_top50 %>%
-  select(from = matched_TFs, to = gene) %>%
+  dplyr::select(from = matched_TFs, to = gene) %>%
   filter(!is.na(from), !is.na(to), from != "", to != "")
 
-# Construct the map
-net <- tbl_graph(edges = tf_gene_edges_top50, directed = TRUE)
-
-# Add the node type and degree of centrality
-net <- net %>%
+net <- tbl_graph(edges = tf_gene_edges_top50, directed = TRUE) %>%
   mutate(
-    type = ifelse(name %in% tf_gene_edges_top50$from, "TF", "Gene"),
+    type   = ifelse(name %in% tf_gene_edges_top50$from, "TF", "Gene"),
     degree = centrality_degree(mode = "all")
   )
 
-# Use force-directed layout of igraph
-set.seed(133)
-layout <- create_layout(net, layout = "fr")
+nodes <- as_tibble(net, active = "nodes")
+order_tf   <- nodes %>% filter(type == "TF")   %>% arrange(desc(degree)) %>% mutate(y = row_number())
+order_gene <- nodes %>% filter(type == "Gene") %>% arrange(desc(degree)) %>% mutate(y = row_number())
+order_gene$y <- rescale(order_gene$y, to = range(order_tf$y))
 
-# 绘图
-ggraph(layout) +
+nodes_pos <- bind_rows(order_tf, order_gene) %>%
+  mutate(x = ifelse(type == "TF", 0, 0.30)) %>%    
+  arrange(match(name, nodes$name))
+
+node_names <- nodes$name
+net <- net %>% 
+  activate(edges) %>% mutate(to_gene = node_names[to]) %>% 
+  activate(nodes)
+
+
+lay <- create_layout(net, layout = "manual", x = nodes_pos$x, y = nodes_pos$y)
+
+g <- ggraph(lay) +
   geom_edge_link(
-    arrow = arrow(length = unit(3, "mm"), type = "closed"),
-    end_cap = circle(3, "mm"),
-    edge_width = 0.6,
-    edge_alpha = 0.4,
-    edge_colour = "gray50"
+    aes(color = to_gene), 
+    arrow = arrow(length = unit(2.5, "mm"), type = "closed"),
+    end_cap = circle(2.2, "mm"),
+    edge_width = 0.4, edge_alpha = 0.55, lineend = "round"
   ) +
-  geom_node_point(
-    aes(color = type, size = degree),
-    alpha = 0.9
+  geom_node_point(aes(size = degree, color = type), alpha = 0.9) +
+  geom_node_text(
+    data = as.data.frame(lay) %>% dplyr::filter(type == "TF"),
+    aes(x = x, y = y, label = name, color = type),
+    hjust = 1, nudge_x = -0.025, vjust = 0.5, size = 6, show.legend = FALSE
   ) +
   geom_node_text(
-    aes(label = name, color = type),
-    repel = TRUE,
-    force = 1.2,                            
-    box.padding = unit(0.6, "lines"),      
-    size = 4,
-    show.legend = FALSE
+    data = as.data.frame(lay) %>% dplyr::filter(type == "Gene"),
+    aes(x = x, y = y, label = name, color = type),
+    hjust = 0, nudge_x =  0.025, vjust = 0.5, size = 6, show.legend = FALSE
   ) +
-  scale_color_manual(values = c("TF" = "#3182bd", "Gene" = "#e6550d")) +
+  scale_color_manual(values = c(TF = "#005AB5", Gene = "#E66100")) +
+  scale_edge_colour_discrete(guide = "none") +
   scale_size(range = c(3, 8)) +
+  coord_cartesian(xlim = c(-0.35, 1.05), clip = "off") +
   theme_graph(base_family = "Arial") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.margin = margin(10, 30, 10, 30)) +
   theme(
-    legend.text = element_text(size = 12),
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
-  ) +
+    legend.title = element_text(size = 16),
+    legend.text  = element_text(size = 16),
+    plot.title   = element_text(size = 16, hjust = 0.5)
+  )+
   labs(
-    title = "TF → Gene Regulatory Network in Adaptive NK Cells (TOP50)",
-    color = "Node Type",
-    size = "Degree"
-  )
+       color = "Node Type", size = "Degree", edge_color = "Target Gene")
+
+print(g)
+
+
+
+
 
 #Visualize the counts for TOP50 TFs in adaptive NK cells 
 
 top_tf_adaptive_df <- as.data.frame(top_tf_adaptive)
 colnames(top_tf_adaptive_df) <- c("TF", "count")
 
-
-ggplot(head(top_tf_adaptive_df, 50), aes(x = reorder(TF, count), y = count, fill = count))  +
-  geom_col(width = 0.7) +  
+ggplot(head(top_tf_adaptive_df, 50), aes(x = reorder(TF, count), y = count, fill = count)) +
+  geom_col(width = 0.7) +
   geom_text(
-    aes(label = count), 
+    aes(label = count),
     hjust = -0.2, size = 5, color = "black"
   ) +
   coord_flip() +
@@ -1034,13 +1335,107 @@ ggplot(head(top_tf_adaptive_df, 50), aes(x = reorder(TF, count), y = count, fill
     panel.grid.major.x = element_line(color = "gray80", linetype = "dotted"),
     axis.ticks = element_blank()
   ) +
-  scale_fill_gradient(
-    low = "#c6dbef", high = "#2171b5"  
+  scale_fill_gradientn(
+    colours = c("#3B528B", "#21908C", "#5DC863", "#FDE725")  # 紫→蓝→绿→黄
   ) +
   scale_y_continuous(
     expand = expansion(mult = c(0, 0.15)),
     limits = c(0, max(top_tf_adaptive_df$count[1:50]) * 1.15)
   )
+
+##GO enrichment for TOP50 TFs 
+top50_TF <- head(top_tf_adaptive_df$TF, 50)
+
+gene_df <- bitr(top50_TF, 
+                fromType = "SYMBOL",
+                toType = "ENTREZID", 
+                OrgDb = org.Hs.eg.db)
+
+ego <- enrichGO(gene         = gene_df$ENTREZID,
+                OrgDb        = org.Hs.eg.db,
+                ont          = "BP",       #or "MF", "CC", "ALL"
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.05,
+                qvalueCutoff  = 0.05,
+                readable      = TRUE)      
+ego_df <- as.data.frame(ego)
+ego_df <- ego_df %>%
+  arrange(desc(Count)) %>%
+  head(30)  # 
+
+ggplot(ego_df, aes(x = reorder(Description, Count), 
+                   y = Count, 
+                   fill = p.adjust)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = Count), 
+            hjust = -0.2, 
+            size = 4, 
+            color = "black") +
+  coord_flip() +
+  scale_fill_gradient(low = "#d73027", high = "#fee090", name = "p.adjust") +
+  labs(
+    title = "GO Enrichment of Top 50 TFs in Adaptive NK Cells",
+    x = "GO Term",
+    y = "Gene Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.major.y = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+
+dotplot(ego, showCategory = 20) + 
+  ggtitle("GO Enrichment of Top 50 TFs in Adaptive NK Cells") +
+  theme(
+    plot.title = element_text(size = 18, hjust = 0.5),  
+    axis.text.x = element_text(size = 16),  
+    axis.text.y = element_text(size = 16),  
+    axis.title.x = element_text(size = 16), 
+    axis.title.y = element_text(size = 16), 
+    legend.title = element_text(size = 16), 
+    legend.text = element_text(size = 16)   
+  )
+
+
+ekegg <- enrichKEGG(
+  gene         = gene_df$ENTREZID,
+  organism     = "hsa",       
+  pvalueCutoff = 0.1,
+  pAdjustMethod = "BH"
+)
+
+ekegg <- setReadable(ekegg, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
+ekegg_df <- as.data.frame(ekegg@result) %>%
+  arrange(desc(Count)) %>%
+  head(30)
+ggplot(ekegg_df, aes(x = reorder(Description, Count), 
+                     y = Count, 
+                     fill = p.adjust)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = Count), 
+            hjust = -0.2, 
+            size = 4, 
+            color = "black") +
+  coord_flip() +
+  scale_fill_gradient(low = "#2171b5", high = "#c6dbef",
+                      name = "adj. p-value") +
+  labs(
+    title = "KEGG Enrichment of Top 50 TFs in Adaptive NK Cells",
+    x = "KEGG Pathway",
+    y = "Gene Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.major.y = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+
+
+
+
+
 
 
 #Narrow down the TFs by overalapping with the differentially enriched TF regulons from PySCENIC 
